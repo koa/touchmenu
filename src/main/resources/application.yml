@@ -1,0 +1,22 @@
+menu:
+  display-settings:
+    - name: default
+  screens:
+    - name: Test
+      display-settings: default
+      touch-topic: BrickletLCD128x64/Test LCD/touchPosition
+      content-topic: BrickletLCD128x64/Test LCD/image
+      default-view:
+        display-value:
+          - label: "Ist"
+            topic: BrickletTemperature/Test Temp/temperature
+            unit: °C
+          - label: "Soll"
+            topic: control/Test Temp/temp
+            unit: °C
+          - label: "Kontrast"
+            topic: BrickletLCD128x64/Test LCD/contrast
+      root-menu:
+        - id: test
+          label: Test
+
