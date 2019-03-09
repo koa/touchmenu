@@ -1,11 +1,15 @@
 package ch.bergturbenthal.home.touch.domain.renderer;
 
 import ch.bergturbenthal.home.touch.domain.settings.DisplaySettings;
+import lombok.Builder;
+import lombok.Value;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.font.FontRenderContext;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.NoninvertibleTransformException;
+import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
@@ -20,16 +24,11 @@ public class DisplayRenderer {
 
   public DisplayRenderer(final DisplaySettings settings) {
     this.settings = settings;
-    final int imageWidth;
-    final int imageHeight;
-    imageWidth = settings.getWidth();
-    imageHeight = settings.getHeight();
-    bufferedImage = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_BYTE_BINARY);
+    bufferedImage =
+        new BufferedImage(
+            settings.getWidth(), settings.getHeight(), BufferedImage.TYPE_BYTE_BINARY);
     graphics = bufferedImage.createGraphics();
-    graphics.setColor(Color.WHITE);
-    graphics.fill(new Rectangle2D.Float(0, 0, imageWidth, imageHeight));
-    graphics.setColor(Color.BLACK);
-    graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, settings.getBigFontSize()));
+    clear();
     transformation = new AffineTransform();
     switch (settings.getOrientation()) {
       case DEFAULT:
@@ -46,8 +45,25 @@ public class DisplayRenderer {
     }
   }
 
-  public Rectangle2D getTouchZone(int column, int row, int colSpan, int rowSpan, double margin) {
+  public Point2D calcTouchPosition(int x, int y) {
+    try {
+      return transformation.inverseTransform(new Point2D.Float(x, y), new Point2D.Float());
+    } catch (NoninvertibleTransformException e) {
+      throw new IllegalStateException("Illegal transformation " + settings.getOrientation(), e);
+    }
+  }
+
+  public void clear() {
+    graphics.setColor(Color.WHITE);
+    graphics.fill(new Rectangle2D.Float(0, 0, settings.getWidth(), settings.getHeight()));
+    graphics.setColor(Color.BLACK);
+    graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, settings.getBigFontSize()));
+    graphics.setStroke(new BasicStroke(0.0f));
+  }
+
+  public Rectangle2D getTouchZone(ZoneAddress position, double margin) {
     final int touchColumnCount = settings.getTouchColumnCount();
+    final int column = position.getColumn();
     if (column >= touchColumnCount)
       throw new IndexOutOfBoundsException(
           "Try to access column "
@@ -58,11 +74,14 @@ public class DisplayRenderer {
     final int width = settings.getWidth();
     double touchFieldWidth = width * 1.0 / touchColumnCount;
     final int touchRowCount = settings.getTouchRowCount();
+    final int row = position.getRow();
     if (row >= touchRowCount)
       throw new IndexOutOfBoundsException(
           "Try to access row " + row + ", while screen has only " + touchRowCount + " rows");
     final int height = settings.getHeight();
     double touchFieldHeight = height * 1.0 / touchRowCount;
+    final int colSpan = position.getColSpan();
+    final int rowSpan = position.getRowSpan();
     return new Rectangle2D.Double(
         touchFieldWidth * column + margin,
         touchFieldHeight * row + margin,
@@ -75,19 +94,16 @@ public class DisplayRenderer {
     graphics.setFont(font.deriveFont(style));
   }
 
-  public void setFont(Font font) {
-    graphics.setFont(font);
-  }
+  //  public void setFont(Font font) {
+  //    graphics.setFont(font);
+  //  }
 
   public void drawText(
       String text,
-      int touchZoneColumn,
-      int touchZoneRow,
-      int colSpan,
-      int rowSpan,
+      ZoneAddress position,
       VerticalAlignment verticalAlignment,
       HorizontalAlignment horizontalAlignment) {
-    final Rectangle2D zone = getTouchZone(touchZoneColumn, touchZoneRow, colSpan, rowSpan, 1);
+    final Rectangle2D zone = getTouchZone(position, 1);
     final double y;
     switch (verticalAlignment) {
       case TOP:
@@ -118,15 +134,19 @@ public class DisplayRenderer {
         throw new IllegalArgumentException(
             "Horizontal alignment " + horizontalAlignment + " not supported");
     }
-    doDrawText(text, x, y, verticalAlignment, horizontalAlignment);
+    doDrawText(
+        text, x, y, verticalAlignment, horizontalAlignment, zone.getWidth(), zone.getHeight());
   }
 
-  public void fillShape(
-      Shape shape, int touchZoneColumn, int touchZoneRow, int colSpan, int rowSpan) {
-    graphics.setTransform(
-        createMoveIntoTransform(
-            getTouchZone(touchZoneColumn, touchZoneRow, colSpan, rowSpan, 2), shape.getBounds2D()));
+  public void fillShape(Shape shape, ZoneAddress position) {
+    graphics.setTransform(createMoveIntoTransform(getTouchZone(position, 2), shape.getBounds2D()));
     graphics.fill(shape);
+    graphics.setTransform(new AffineTransform());
+  }
+
+  public void drawShape(Shape shape, ZoneAddress position) {
+    graphics.setTransform(createMoveIntoTransform(getTouchZone(position, 2), shape.getBounds2D()));
+    graphics.draw(shape);
     graphics.setTransform(new AffineTransform());
   }
 
@@ -151,9 +171,14 @@ public class DisplayRenderer {
       double x,
       double y,
       VerticalAlignment verticalAlignment,
-      HorizontalAlignment horizontalAlignment) {
-    final Font currentFont = graphics.getFont();
+      HorizontalAlignment horizontalAlignment,
+      final double maxWidth,
+      final double maxHeight) {
+
+    final Font fontBefore = graphics.getFont();
     final FontRenderContext fontRenderContext = graphics.getFontRenderContext();
+    final Font currentFont = findFittingFont(text, maxWidth, maxHeight, fontBefore, fontRenderContext);
+    graphics.setFont(currentFont);
     final Rectangle2D stringBounds = currentFont.getStringBounds(text, fontRenderContext);
     final float drawX;
     final float drawY;
@@ -188,6 +213,22 @@ public class DisplayRenderer {
             "Unsupported horizontal alignment: " + horizontalAlignment);
     }
     graphics.drawString(text, drawX, drawY);
+    graphics.setFont(fontBefore);
+  }
+
+  private Font findFittingFont(
+      final String text,
+      final double maxWidth,
+      final double maxHeight,
+      final Font fontBefore,
+      final FontRenderContext fontRenderContext) {
+    for (int i = fontBefore.getSize(); i > 1; i--) {
+      Font currentFont = fontBefore.deriveFont((float) i);
+      final Rectangle2D stringBounds = currentFont.getStringBounds(text, fontRenderContext);
+      if (!(stringBounds.getWidth() > maxWidth) && !(stringBounds.getHeight() > maxHeight))
+        return currentFont;
+    }
+    return fontBefore;
   }
 
   public void render(OutputStream out) throws IOException {
@@ -209,5 +250,21 @@ public class DisplayRenderer {
     LEFT,
     CENTER,
     RIGHT
+  }
+
+  @Value
+  @Builder
+  public static class ZoneAddress {
+    private int column;
+    private int row;
+    private int colSpan;
+    private int rowSpan;
+
+    public static class ZoneAddressBuilder {
+      public ZoneAddressBuilder() {
+        colSpan = 1;
+        rowSpan = 1;
+      }
+    }
   }
 }

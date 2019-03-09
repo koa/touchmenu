@@ -26,34 +26,32 @@ public class DisplayRendererTest {
   }
 
   private void renderExamples(final DisplayRenderer displayRenderer) {
-    displayRenderer.fillShape(Shapes.UP_ARROW, 1, 0, 1, 1);
+
+    displayRenderer.fillShape(
+        Shapes.UP_ARROW, DisplayRenderer.ZoneAddress.builder().row(0).column(1).build());
+    ;
     displayRenderer.setFontStyle(Font.BOLD);
     displayRenderer.drawText(
         "22.0",
-        0,
-        2,
-        2,
-        1,
+        DisplayRenderer.ZoneAddress.builder().row(2).column(0).colSpan(2).build(),
         DisplayRenderer.VerticalAlignment.MIDDLE,
         DisplayRenderer.HorizontalAlignment.CENTER);
     displayRenderer.setFontStyle(Font.PLAIN);
     displayRenderer.drawText(
         "21.7",
-        0,
-        1,
-        2,
-        1,
+        DisplayRenderer.ZoneAddress.builder().row(1).column(0).colSpan(2).build(),
         DisplayRenderer.VerticalAlignment.MIDDLE,
         DisplayRenderer.HorizontalAlignment.CENTER);
+
     displayRenderer.drawText(
         "°C",
-        0,
-        3,
-        2,
-        1,
+        DisplayRenderer.ZoneAddress.builder().row(3).column(0).colSpan(2).build(),
         DisplayRenderer.VerticalAlignment.MIDDLE,
         DisplayRenderer.HorizontalAlignment.CENTER);
-    displayRenderer.fillShape(Shapes.DOWN_ARROW, 1, 4, 1, 1);
-    displayRenderer.fillShape(Shapes.LEFT_ARROW, 0, 4, 1, 1);
+
+    displayRenderer.fillShape(
+        Shapes.DOWN_ARROW, DisplayRenderer.ZoneAddress.builder().row(4).column(1).build());
+    displayRenderer.drawShape(
+        Shapes.LEFT_ARROW, DisplayRenderer.ZoneAddress.builder().row(4).column(0).build());
   }
 }

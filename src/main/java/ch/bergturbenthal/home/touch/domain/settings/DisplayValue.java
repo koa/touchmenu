@@ -6,5 +6,12 @@ import lombok.Data;
 public class DisplayValue {
   private String label;
   private String topic;
-  private String unit;
+  private String format;
+  private Type type;
+
+  public enum Type {
+    INTEGER,
+    STRING,
+    FLOAT
+  }
 }
