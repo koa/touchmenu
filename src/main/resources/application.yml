@@ -1,22 +1,47 @@
 menu:
-  display-settings:
-    - name: default
   screens:
     - name: Test
       display-settings: default
-      touch-topic: BrickletLCD128x64/Test LCD/touchPosition
-      content-topic: BrickletLCD128x64/Test LCD/image
+      topic: BrickletLCD128x64/Test LCD
       default-view:
         display-value:
-          - label: "Ist"
+          - topic: control/clock
+          - label: "Temp. Ist"
             topic: BrickletTemperature/Test Temp/temperature
-            unit: °C
-          - label: "Soll"
+            type: float
+            format: 0.0°C
+          - label: "Temp. Soll"
             topic: control/Test Temp/temp
-            unit: °C
-          - label: "Kontrast"
-            topic: BrickletLCD128x64/Test LCD/contrast
+            type: float
+            format: 0.0°C
       root-menu:
-        - id: test
-          label: Test
+        menu:
+          - id: test
+            label: Temperatur
+            content:
+              menu:
+                - id: x2
+                  label: t2
+              display-value:
+                - label: "Temp. Ist"
+                  topic: BrickletTemperature/Test Temp/temperature
+                  type: float
+                  format: 0.0°C
+                - label: "Temp. Soll"
+                  topic: control/Test Temp/temp
+                  type: float
+                  format: 0.0°C
 
+  display-settings:
+    default:
+      name: Default
+server:
+  port: 8082
+spring:
+  cloud:
+    discovery:
+      client:
+        simple:
+          instances:
+            mqtt:
+              - uri: tcp://172.31.72.2:1883

@@ -11,7 +11,7 @@ import java.util.Map;
 @ConfigurationProperties("menu")
 @Data
 public class MenuProperties {
-  private MqttEndpoint mqtt;
+  private MqttEndpoint mqtt = new MqttEndpoint();
   private Map<String, DisplaySettings> displaySettings;
   private List<Screen> screens;
 }
