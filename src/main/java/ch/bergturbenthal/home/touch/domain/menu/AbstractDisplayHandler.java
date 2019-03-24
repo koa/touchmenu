@@ -109,7 +109,7 @@ public class AbstractDisplayHandler {
               DisplayEntry.TouchResult touchResult = DisplayEntry.TouchResult.IGNORED;
               while (touchResult == DisplayEntry.TouchResult.IGNORED && iterator.hasNext())
                 touchResult = iterator.next().handleTouch(p);
-              //log.info("Touch result: "+touchResult);
+              // log.info("Touch result: "+touchResult);
               switch (touchResult) {
                 case IGNORED:
                   defaultAction.run();
@@ -124,15 +124,16 @@ public class AbstractDisplayHandler {
             ex -> log.warn("Cannot update ui", ex));
   }
 
-  protected void setBackgroundLight(String topic, int brightness) {
+  protected void setBackgroundLightEnabled(String topic, boolean enabled) {
     final MqttMessage backgroundLightMessage = new MqttMessage();
     backgroundLightMessage.setRetained(true);
     backgroundLightMessage.setQos(1);
-    backgroundLightMessage.setPayload(Integer.toString(brightness).getBytes());
+    backgroundLightMessage.setPayload(Boolean.toString(enabled).getBytes());
     mqttClient
         .publish(topic, backgroundLightMessage)
         .subscribe(response -> {}, ex -> log.warn("Cannot set background light", ex));
   }
+
 
   protected void paint(
       final DisplayRenderer displayRenderer,
@@ -157,7 +158,8 @@ public class AbstractDisplayHandler {
     }
   }
 
-  protected Function<String, String> createDisplayFormatter(final Type type, final String dvFormat) {
+  protected Function<String, String> createDisplayFormatter(
+      final Type type, final String dvFormat) {
     final Function<String, String> valueFormatter;
     if (type != null && dvFormat != null) {
       switch (type) {
@@ -182,6 +184,13 @@ public class AbstractDisplayHandler {
           break;
       }
     } else valueFormatter = Function.identity();
-    return valueFormatter;
+    return v -> {
+      try {
+        return valueFormatter.apply(v);
+      } catch (RuntimeException ex) {
+        log.warn("Cannot format " + v + " as " + dvFormat, ex);
+        return "";
+      }
+    };
   }
 }

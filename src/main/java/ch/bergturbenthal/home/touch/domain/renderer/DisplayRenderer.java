@@ -177,7 +177,8 @@ public class DisplayRenderer {
 
     final Font fontBefore = graphics.getFont();
     final FontRenderContext fontRenderContext = graphics.getFontRenderContext();
-    final Font currentFont = findFittingFont(text, maxWidth, maxHeight, fontBefore, fontRenderContext);
+    final Font currentFont =
+        findFittingFont(text, maxWidth, maxHeight, fontBefore, fontRenderContext);
     graphics.setFont(currentFont);
     final Rectangle2D stringBounds = currentFont.getStringBounds(text, fontRenderContext);
     final float drawX;
@@ -222,11 +223,13 @@ public class DisplayRenderer {
       final double maxHeight,
       final Font fontBefore,
       final FontRenderContext fontRenderContext) {
-    for (int i = fontBefore.getSize(); i > 1; i--) {
-      Font currentFont = fontBefore.deriveFont((float) i);
+    float candidateSize = fontBefore.getSize2D();
+    while (candidateSize > 1) {
+      Font currentFont = fontBefore.deriveFont((float) candidateSize);
       final Rectangle2D stringBounds = currentFont.getStringBounds(text, fontRenderContext);
       if (!(stringBounds.getWidth() > maxWidth) && !(stringBounds.getHeight() > maxHeight))
         return currentFont;
+      candidateSize = (float) (candidateSize * 0.7);
     }
     return fontBefore;
   }

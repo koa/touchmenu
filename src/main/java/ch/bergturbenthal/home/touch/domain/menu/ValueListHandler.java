@@ -1,11 +1,10 @@
 package ch.bergturbenthal.home.touch.domain.menu;
 
-import ch.bergturbenthal.home.touch.domain.menu.settings.Type;
+import ch.bergturbenthal.home.touch.domain.menu.settings.DisplayValue;
+import ch.bergturbenthal.home.touch.domain.menu.settings.View;
 import ch.bergturbenthal.home.touch.domain.mqtt.MqttClient;
 import ch.bergturbenthal.home.touch.domain.renderer.DisplayRenderer;
 import ch.bergturbenthal.home.touch.domain.settings.DisplaySettings;
-import ch.bergturbenthal.home.touch.domain.menu.settings.DisplayValue;
-import ch.bergturbenthal.home.touch.domain.menu.settings.View;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -13,8 +12,6 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 
 import java.awt.geom.Point2D;
-import java.text.DecimalFormat;
-import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -37,11 +34,11 @@ public class ValueListHandler extends AbstractDisplayHandler {
   }
 
   public Mono<ExitReason> handleView(
-          String topic,
-          View view,
-          DisplaySettings settings,
-          boolean showBackButton,
-          final boolean enabledBackgroundLight) {
+      String topic,
+      View view,
+      DisplaySettings settings,
+      boolean showBackButton,
+      final boolean enabledBackgroundLight) {
     return Mono.create(
         sink -> {
           final DisplayRenderer displayRenderer = new DisplayRenderer(settings);
@@ -51,12 +48,13 @@ public class ValueListHandler extends AbstractDisplayHandler {
           final Queue<Disposable> cleanupQueue = new ConcurrentLinkedDeque<>();
           final AtomicReference<Runnable> refresh = new AtomicReference<>(() -> {});
           final boolean hasCloseButton = showBackButton;
-          setBackgroundLight(topic + "/backlight", enabledBackgroundLight ? 100 : 0);
+          setBackgroundLightEnabled(topic + "/enableBacklight", enabledBackgroundLight);
 
           List<Supplier<String>> menuEntries = new ArrayList<>();
           for (DisplayValue dv : displayValue) {
             AtomicReference<String> lastValue = new AtomicReference<>("");
-            Function<String, String> valueFormatter = createDisplayFormatter(dv.getType(), dv.getFormat());
+            Function<String, String> valueFormatter =
+                createDisplayFormatter(dv.getType(), dv.getFormat());
             Function<String, String> formatter =
                 c -> {
                   if (c == null || c.isEmpty()) return "-";

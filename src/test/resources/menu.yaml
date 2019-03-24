@@ -1,6 +1,6 @@
 name: Test
 #displaySettings: default
-screenTimeout: "PT5S"
+screenTimeout: "PT1M"
 defaultView:
   displayValue:
     - topic: control/clock
@@ -36,3 +36,23 @@ rootMenu:
           defaultValue: 20
           type: float
           format: 0.0°C
+    setContrast:
+      label: Kontrast
+      content:
+        valueEdit:
+          topic: BrickletLCD128x64/Test LCD/contrast
+          label: Kontrast
+          increment: 2
+          defaultValue: 14
+          type: integer
+          format: 0
+    setBright:
+      label: Helligkeit
+      content:
+        valueEdit:
+          topic: BrickletLCD128x64/Test LCD/backlight
+          label: Helligkeit
+          increment: 10
+          defaultValue: 80
+          type: integer
+          format: 0

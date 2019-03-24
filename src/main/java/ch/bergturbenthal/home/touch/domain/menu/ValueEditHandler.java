@@ -1,5 +1,6 @@
 package ch.bergturbenthal.home.touch.domain.menu;
 
+import ch.bergturbenthal.home.touch.domain.menu.settings.Type;
 import ch.bergturbenthal.home.touch.domain.menu.settings.ValueEdit;
 import ch.bergturbenthal.home.touch.domain.mqtt.MqttClient;
 import ch.bergturbenthal.home.touch.domain.renderer.DisplayRenderer;
@@ -40,7 +41,10 @@ public class ValueEditHandler extends AbstractDisplayHandler {
 
           final AtomicReference<Runnable> refresh = new AtomicReference<>(() -> {});
           AtomicReference<String> lastTakenValue =
-              new AtomicReference<>(Double.toString(valueEdit.getDefaultValue()));
+              new AtomicReference<>(
+                  valueEdit.getType() == Type.INTEGER
+                      ? Integer.toString((int) valueEdit.getDefaultValue())
+                      : Double.toString(valueEdit.getDefaultValue()));
           mqttClient.registerTopic(
               valueTopic,
               message -> {
@@ -53,13 +57,17 @@ public class ValueEditHandler extends AbstractDisplayHandler {
           final Consumer<Integer> valueChangeConsumer =
               increment -> {
                 final String valueBefore = lastTakenValue.get();
-                //log.info("Value before: " + valueBefore);
+                // log.info("Value before: " + valueBefore);
                 int currentValue =
                     (int) (Double.parseDouble(valueBefore) / valueEdit.getIncrement());
-                //log.info("Current value: " + currentValue);
+                // log.info("Current value: " + currentValue);
+
+                final double newValueNumber = (currentValue + increment) * valueEdit.getIncrement();
                 String newValue =
-                    Double.toString((currentValue + increment) * valueEdit.getIncrement());
-                //log.info("Value after: " + newValue);
+                    valueEdit.getType() == Type.INTEGER
+                        ? Integer.toString((int) newValueNumber)
+                        : Double.toString(newValueNumber);
+                // log.info("Value after: " + newValue);
                 final MqttMessage message = new MqttMessage();
                 message.setQos(1);
                 message.setRetained(true);
