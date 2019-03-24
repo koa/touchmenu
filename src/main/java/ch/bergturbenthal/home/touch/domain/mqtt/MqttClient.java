@@ -10,10 +10,16 @@ import java.util.function.Consumer;
 public interface MqttClient {
   Flux<MqttWireMessage> publish(String topic, MqttMessage message);
 
-  Flux<MqttMessage> listenTopic(String topic);
+  Flux<ReceivedMqttMessage> listenTopic(String topic);
 
   void registerTopic(
-          final String topic,
-          final Consumer<MqttMessage> mqttMessageConsumer,
-          final Consumer<Disposable> disposableConsumer);
+      final String topic,
+      final Consumer<ReceivedMqttMessage> mqttMessageConsumer,
+      final Consumer<Disposable> disposableConsumer);
+
+  interface ReceivedMqttMessage {
+    String getTopic();
+
+    MqttMessage getMessage();
+  }
 }

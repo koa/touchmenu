@@ -1,0 +1,27 @@
+name: Test
+#displaySettings: default
+defaultView:
+  displayValue:
+    - topic: control/clock
+    - label: "Temp. Ist"
+      topic: BrickletTemperature/Test Temp/temperature
+      type: float
+      format: 0.0°C
+    - label: "Temp. Soll"
+      topic: control/Test Temp/temp
+      type: float
+      format: 0.0°C
+rootMenu:
+  menu:
+    test:
+      content:
+        displayValue:
+          - label: "Temp. Ist"
+            topic: BrickletTemperature/Test Temp/temperature
+            type: float
+            format: 0.0°C
+          - label: "Temp. Soll"
+            topic: control/Test Temp/temp
+            type: float
+            format: 0.0°C
+      label: Temperatur

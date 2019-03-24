@@ -5,5 +5,11 @@ import java.awt.geom.Point2D;
 public interface DisplayEntry {
   void draw();
 
-  boolean handleTouch(Point2D position);
+  TouchResult handleTouch(Point2D position);
+
+  enum TouchResult {
+    IGNORED,
+    DIRTY,
+    NOOP
+  }
 }

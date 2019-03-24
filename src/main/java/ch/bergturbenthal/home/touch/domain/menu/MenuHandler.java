@@ -4,7 +4,6 @@ import ch.bergturbenthal.home.touch.domain.mqtt.MqttClient;
 import ch.bergturbenthal.home.touch.domain.renderer.DisplayRenderer;
 import ch.bergturbenthal.home.touch.domain.settings.DisplaySettings;
 import ch.bergturbenthal.home.touch.domain.settings.MenuEntry;
-import ch.bergturbenthal.home.touch.domain.settings.Screen;
 import ch.bergturbenthal.home.touch.domain.settings.View;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -14,9 +13,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.MonoSink;
 
 import java.awt.geom.Point2D;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -29,12 +26,13 @@ public class MenuHandler extends AbstractDisplayHandler {
     super(mqttClient, mapper);
   }
 
-  Mono<String> showMenu(View view, Screen screen, DisplaySettings settings) {
+  Mono<String> showMenu(String topic, View view, DisplaySettings settings) {
     final DisplayRenderer displayRenderer = new DisplayRenderer(settings);
     Queue<Disposable> disposables = new ConcurrentLinkedDeque<>();
     return Mono.create(
             (MonoSink<String> sink) -> {
-              final List<MenuEntry> menu = view.getMenu();
+              final ArrayList<Map.Entry<String, MenuEntry>> menu =
+                  new ArrayList<>(view.getMenu().entrySet());
               final int touchRowCount = settings.getTouchRowCount();
               int rowCountWithoutScroll = touchRowCount - 1;
               int rowCountWithScroll = touchRowCount - 2;
@@ -69,11 +67,11 @@ public class MenuHandler extends AbstractDisplayHandler {
               int menuStartRow = enableScroll ? 1 : 0;
               for (int i = 0; i < visibleMenuEntryCount; i++) {
                 final int finalI = i;
-                Supplier<MenuEntry> currentEntry =
+                Supplier<Optional<Map.Entry<String, MenuEntry>>> currentEntry =
                     () -> {
                       final int currentIndex = finalI + startEntry.get();
-                      if (currentIndex < menu.size()) return menu.get(currentIndex);
-                      return null;
+                      if (currentIndex < menu.size()) return Optional.of(menu.get(currentIndex));
+                      return Optional.empty();
                     };
                 final DisplayRenderer.ZoneAddress position =
                     DisplayRenderer.ZoneAddress.builder()
@@ -85,29 +83,37 @@ public class MenuHandler extends AbstractDisplayHandler {
                     new DisplayEntry() {
                       @Override
                       public void draw() {
-                        final MenuEntry menuEntry = currentEntry.get();
-                        if (menuEntry == null) return;
-                        displayRenderer.drawText(
-                            menuEntry.getLabel(),
-                            position,
-                            DisplayRenderer.VerticalAlignment.MIDDLE,
-                            DisplayRenderer.HorizontalAlignment.LEFT);
+                        currentEntry
+                            .get()
+                            .map(Map.Entry::getValue)
+                            .map(MenuEntry::getLabel)
+                            .ifPresent(
+                                menuEntry ->
+                                    displayRenderer.drawText(
+                                        menuEntry,
+                                        position,
+                                        DisplayRenderer.VerticalAlignment.MIDDLE,
+                                        DisplayRenderer.HorizontalAlignment.LEFT));
                       }
 
                       @Override
-                      public boolean handleTouch(final Point2D p) {
-                        final MenuEntry menuEntry = currentEntry.get();
-                        if (menuEntry != null
-                            && displayRenderer.getTouchZone(position, 0).contains(p)) {
-                          sink.success(menuEntry.getId());
-                          return true;
-                        }
-                        return false;
+                      public TouchResult handleTouch(final Point2D p) {
+                        return currentEntry
+                            .get()
+                            .filter(e -> displayRenderer.getTouchZone(position, 0).contains(p))
+                            .map(Map.Entry::getKey)
+                            .map(
+                                e -> {
+                                  sink.success(e);
+                                  return TouchResult.NOOP;
+                                })
+                            .orElse(TouchResult.IGNORED);
                       }
                     });
               }
-              disposables.add(startLoop(screen, displayRenderer, refresh, displayList, () -> {}));
-              refresh.set(() -> paint(displayRenderer, screen.getTopic() + "/image", displayList));
+              refresh.set(() -> paint(displayRenderer, topic + "/image", displayList));
+              disposables.add(
+                  startLoop(topic, displayRenderer, refresh.get(), displayList, () -> {}));
             })
         .doFinally(
             signal -> {

@@ -29,12 +29,12 @@ public class ShapeButtonDisplayEntry implements DisplayEntry {
   }
 
   @Override
-  public boolean handleTouch(final Point2D p) {
+  public TouchResult handleTouch(final Point2D p) {
     final Rectangle2D touchZone = renderer.getTouchZone(position, 0);
     if (touchZone.contains(p)) {
       actionCallback.run();
-      return true;
+      return TouchResult.NOOP;
     }
-    return false;
+    return TouchResult.IGNORED;
   }
 }

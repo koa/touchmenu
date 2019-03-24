@@ -1,11 +1,19 @@
 package ch.bergturbenthal.home.touch.domain.settings;
 
-import lombok.Data;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import lombok.Builder;
+import lombok.NonNull;
+import lombok.Value;
 
-@Data
+@Value
+@Builder(toBuilder = true)
+@JsonDeserialize(builder = MenuEntry.MenuEntryBuilder.class)
 public class MenuEntry {
-  private String id;
   private String label;
   private String icon;
-  private View content;
+  @NonNull private View content;
+
+  @JsonPOJOBuilder(withPrefix = "")
+  public static class MenuEntryBuilder {}
 }

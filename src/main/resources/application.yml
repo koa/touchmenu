@@ -1,37 +1,4 @@
 menu:
-  screens:
-    - name: Test
-      display-settings: default
-      topic: BrickletLCD128x64/Test LCD
-      default-view:
-        display-value:
-          - topic: control/clock
-          - label: "Temp. Ist"
-            topic: BrickletTemperature/Test Temp/temperature
-            type: float
-            format: 0.0°C
-          - label: "Temp. Soll"
-            topic: control/Test Temp/temp
-            type: float
-            format: 0.0°C
-      root-menu:
-        menu:
-          - id: test
-            label: Temperatur
-            content:
-              menu:
-                - id: x2
-                  label: t2
-              display-value:
-                - label: "Temp. Ist"
-                  topic: BrickletTemperature/Test Temp/temperature
-                  type: float
-                  format: 0.0°C
-                - label: "Temp. Soll"
-                  topic: control/Test Temp/temp
-                  type: float
-                  format: 0.0°C
-
   display-settings:
     default:
       name: Default

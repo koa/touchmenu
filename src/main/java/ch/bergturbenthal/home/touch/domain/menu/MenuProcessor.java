@@ -5,20 +5,17 @@ import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.Disposable;
+import reactor.core.publisher.Mono;
 
-import javax.annotation.PostConstruct;
-import java.util.Deque;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -39,158 +36,136 @@ public class MenuProcessor {
     this.scheduledExecutorService = scheduledExecutorService;
   }
 
-  @PostConstruct
-  public void startMenu() {
+  public Disposable startTopic(final String topic, final Screen screen) {
     final Map<String, DisplaySettings> displaySettings = menuProperties.getDisplaySettings();
-    for (Screen screen : menuProperties.getScreens()) {
-      Deque<DisplayState> backList = new ConcurrentLinkedDeque<>();
-      final DisplaySettings settings = displaySettings.get(screen.getDisplaySettings());
-      final DisplayState currentState = new DisplayState(false, null);
-      AtomicReference<Disposable> openDisposable = new AtomicReference<>(null);
-      Consumer<Disposable> disposableConsumer =
-          disp -> {
-            final Disposable oldDisposable = openDisposable.getAndSet(disp);
-            if (oldDisposable != null) oldDisposable.dispose();
-          };
-      AtomicReference<ScheduledFuture<?>> runningSchedule = new AtomicReference<>(null);
-      Consumer<ScheduledFuture<?>> pendingTimerConsumer =
-          scheduledFuture -> {
-            final ScheduledFuture<?> oldSchedule = runningSchedule.getAndSet(scheduledFuture);
-            if (oldSchedule != null && !oldSchedule.isDone()) oldSchedule.cancel(false);
-          };
-      enterState(
-          screen, settings, currentState, disposableConsumer, pendingTimerConsumer, backList);
-    }
+    final DisplaySettings settings = displaySettings.get(screen.getDisplaySettings());
+    final DisplayState currentState = new DisplayState(false, null);
+    AtomicReference<Disposable> currentDisposables = new AtomicReference<>();
+    Consumer<Disposable> disposableConsumer =
+        disposable -> {
+          final Disposable previousDispable = currentDisposables.getAndSet(disposable);
+          if (previousDispable != null) previousDispable.dispose();
+        };
+    enterState(topic, screen, settings, currentState, Collections.emptyList(), disposableConsumer);
+    return () -> {
+      disposableConsumer.accept(null);
+    };
   }
 
   protected void enterState(
+      final String topic,
       final Screen screen,
       final DisplaySettings settings,
       final DisplayState currentState,
-      final Consumer<Disposable> disposableConsumer,
-      final Consumer<ScheduledFuture<?>> pendingTimerConsumer,
-      final Deque<DisplayState> backList) {
-    log.info("Show state " + currentState);
-    AtomicBoolean closed = new AtomicBoolean(false);
-    Consumer<DisplayState> enterStateConsumer =
-        nextState ->
-            enterState(
-                screen, settings, nextState, disposableConsumer, pendingTimerConsumer, backList);
-    final String menuEntry = currentState.getMenuEntry();
-    Consumer<DisplayState> nextStateConsumer =
-        nextState -> {
-          if (!closed.getAndSet(true)) {
-            if (menuEntry != null && !Objects.equals(nextState, currentState))
-              backList.push(currentState);
-            enterStateConsumer.accept(nextState);
-          }
-        };
-    Runnable goBackRunnable =
-        () -> {
-          if (!closed.getAndSet(true)) {
-            final DisplayState backState = backList.pollFirst();
-            if (backState != null) enterStateConsumer.accept(backState);
-            else enterStateConsumer.accept(new DisplayState(true, null));
-          }
-        };
-
-    final Runnable closeMenuRunnable =
-        () -> {
-          if (!closed.getAndSet(true)) {
-            backList.clear();
-            enterStateConsumer.accept(new DisplayState(false, null));
-          }
-        };
-    if (menuEntry != null || currentState.isEnabledBackgroundLight()) {
-      pendingTimerConsumer.accept(
-          scheduledExecutorService.schedule(closeMenuRunnable, 10, TimeUnit.MINUTES));
-    }
-
-    final View selectedView;
-    String currentViewId;
-    if (menuEntry == null) {
-      selectedView = screen.getDefaultView();
-      currentViewId = null;
-    } else if (menuEntry.isEmpty()) {
-      selectedView = screen.getRootMenu();
-      currentViewId = "";
-    } else {
-      final View rootMenu = screen.getRootMenu();
-      View currentMenu = rootMenu;
-      final String[] split = menuEntry.split("\\.");
-      for (int i = 0; i < split.length && currentMenu != null; i++) {
-        final String menuPart = split[i];
-        final List<MenuEntry> menu = currentMenu.getMenu();
-        if (menu != null) {
-          currentMenu =
-              menu.stream()
-                  .filter(m -> m.getId().equals(menuPart))
-                  .findFirst()
-                  .map(MenuEntry::getContent)
-                  .orElse(null);
-        } else currentMenu = null;
-      }
-      if (currentMenu == null) {
-        log.warn("Cannot find menu entry " + menuEntry);
-        selectedView = rootMenu;
-        currentViewId = "";
-      } else {
-        selectedView = currentMenu;
-        currentViewId = menuEntry;
-      }
-    }
+      final List<DisplayState> backList,
+      Consumer<Disposable> disposableConsumer) {
+    AtomicBoolean done = new AtomicBoolean(false);
+    disposableConsumer.accept(null);
+    final Mono<MenuResult> finalResult = showState(topic, screen, settings, currentState);
     disposableConsumer.accept(
-        showView(
-            selectedView,
-            currentState,
-            nextStateConsumer,
-            screen,
-            settings,
-            goBackRunnable,
-            currentViewId));
+        finalResult.subscribe(
+            menuResult -> {
+              final DisplayState newState;
+              final List<DisplayState> newBackList;
+              if (menuResult instanceof GoBackResult && backList.size() > 0) {
+                newState = backList.get(backList.size() - 1);
+                newBackList = backList.subList(0, backList.size() - 1);
+              } else if (menuResult instanceof DisplayState) {
+                newBackList =
+                    Stream.concat(backList.stream(), Stream.of(currentState))
+                        .collect(Collectors.toList());
+                newState = (DisplayState) menuResult;
+              } else {
+                newState = new DisplayState(false, null);
+                newBackList = Collections.emptyList();
+              }
+              done.set(true);
+              enterState(topic, screen, settings, newState, newBackList, disposableConsumer);
+            },
+            ex -> {
+              log.warn("Exception while showing menu", ex);
+              enterState(
+                  topic,
+                  screen,
+                  settings,
+                  new DisplayState(false, null),
+                  Collections.emptyList(),
+                  disposableConsumer);
+            },
+            () -> {
+              if (!done.get())
+                enterState(
+                    topic,
+                    screen,
+                    settings,
+                    new DisplayState(false, null),
+                    Collections.emptyList(),
+                    disposableConsumer);
+              // log.warn("Finished state " + currentState);
+            }));
   }
 
-  private Disposable showView(
+  private Mono<MenuResult> showState(
+      final String topic,
+      final Screen screen,
+      final DisplaySettings settings,
+      final DisplayState currentState) {
+    // log.info("Show state " + currentState);
+
+    final View selectedView =
+        currentState.getView() == null ? screen.getDefaultView() : currentState.getView();
+
+    final Mono<MenuResult> resultMono =
+        showView(topic, selectedView, currentState, screen, settings)
+        // .doFinally(signal -> log.info("Hide state by " + signal + ": " + currentState))
+        ;
+    if (!currentState.isEnabledBackgroundLight()) {
+      return resultMono;
+    }
+    return Mono.first(
+        resultMono, Mono.delay(screen.getScreenTimeout()).map(l -> new TimeoutExceededResult()));
+  }
+
+  private Mono<MenuResult> showView(
+      String topic,
       final View selectedView,
       final DisplayState currentState,
-      final Consumer<DisplayState> nextStateConsumer,
       final Screen screen,
-      final DisplaySettings settings,
-      final Runnable goBackRunnable,
-      final String currentViewId) {
+      final DisplaySettings settings) {
     if (selectedView.getMenu() != null && !selectedView.getMenu().isEmpty()) {
-      final Function<String, String> menuEntryFunction;
-      if (currentViewId.isEmpty()) menuEntryFunction = Function.identity();
-      else menuEntryFunction = s -> currentViewId + "." + s;
       return menuHandler
-          .showMenu(selectedView, screen, settings)
-          .map(menuEntryFunction)
+          .showMenu(topic, selectedView, settings)
+          .map(e -> selectedView.getMenu().get(e))
+          .map(MenuEntry::getContent)
           .map(e -> new DisplayState(true, e))
-          .subscribe(
-              nextStateConsumer,
-              ex -> {
-                log.warn("Error processing menu", ex);
-                nextStateConsumer.accept(new DisplayState(true, null));
-              },
-              goBackRunnable);
+          .cast(MenuResult.class)
+          .defaultIfEmpty(new GoBackResult());
     }
 
-    return valueListHandler.handleView(
-        selectedView,
-        screen,
-        settings,
-        () ->
-            nextStateConsumer.accept(
-                !currentState.isEnabledBackgroundLight()
-                    ? new DisplayState(true, null)
-                    : new DisplayState(true, screen.getStartEntry())),
-        false,
-        currentState.isEnabledBackgroundLight());
+    final Mono<ValueListHandler.ExitReason> exitReasonMono =
+        valueListHandler.handleView(
+            topic, selectedView, settings, false, currentState.isEnabledBackgroundLight());
+    return exitReasonMono.map(
+        r -> {
+          if (currentState.getView() == null && r == ValueListHandler.ExitReason.TOUCH)
+            if (!currentState.isEnabledBackgroundLight()) {
+              return new DisplayState(true, null);
+            } else {
+              return new DisplayState(true, screen.getRootMenu());
+            }
+          else return new GoBackResult();
+        });
   }
 
+  private interface MenuResult {}
+
+  private static class GoBackResult implements MenuResult {}
+
+  private static class TimeoutExceededResult implements MenuResult {}
+
   @Value
-  private static class DisplayState {
-    boolean enabledBackgroundLight;
-    String menuEntry;
+  private static class DisplayState implements MenuResult {
+    private boolean enabledBackgroundLight;
+    private View view;
   }
 }

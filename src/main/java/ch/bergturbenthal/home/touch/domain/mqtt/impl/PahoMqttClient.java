@@ -3,6 +3,7 @@ package ch.bergturbenthal.home.touch.domain.mqtt.impl;
 import ch.bergturbenthal.home.touch.domain.mqtt.MqttClient;
 import ch.bergturbenthal.home.touch.domain.settings.MenuProperties;
 import ch.bergturbenthal.home.touch.domain.settings.MqttEndpoint;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.internal.wire.MqttWireMessage;
@@ -18,18 +19,23 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.MonoSink;
 
 import java.net.InetSocketAddress;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
 @RefreshScope
 public class PahoMqttClient implements MqttClient {
+  private static final Pattern SPLIT_PATTERN = Pattern.compile(Pattern.quote("/"));
   private final MenuProperties properties;
-  private final Map<String, Collection<FluxSink<MqttMessage>>> registeredSinks =
-      new ConcurrentHashMap<>();
+  private final Map<String, RegisteredListeners> registeredSinks = new ConcurrentHashMap<>();
   private final Map<InetSocketAddress, MqttAsyncClient> runningClients = new ConcurrentHashMap<>();
   private final Map<String, MqttMessage> retainedMessages = new ConcurrentHashMap<>();
   private DiscoveryClient discoveryClient;
@@ -44,7 +50,7 @@ public class PahoMqttClient implements MqttClient {
 
   @Scheduled(fixedDelay = 60 * 1000, initialDelay = 10 * 1000)
   public void discover() throws MqttException {
-    log.info("Discover");
+    //log.info("Discover");
     final MqttEndpoint mqtt = properties.getMqtt();
     final String service = mqtt.getService();
     final List<ServiceInstance> discoveryClientInstances = discoveryClient.getInstances(service);
@@ -66,12 +72,17 @@ public class PahoMqttClient implements MqttClient {
 
             @Override
             public void messageArrived(final String s, final MqttMessage mqttMessage) {
+              if (mqttMessage.isRetained()) retainedMessages.put(s, mqttMessage);
               if (log.isInfoEnabled()) {
-                log.info(" -> " + s + ": " + new String(mqttMessage.getPayload()));
+                //log.info(" -> " + s + ": " + new String(mqttMessage.getPayload()));
               }
-              registeredSinks
-                  .getOrDefault(s, Collections.emptyList())
-                  .forEach(sink -> sink.next(mqttMessage));
+              final ReceivedMqttMessage msg = new ImmutableReceivedMqttMessage(s, mqttMessage);
+              registeredSinks.values().stream()
+                  .filter(listener -> listener.getMatchingTopic().matcher(s).matches())
+                  .flatMap(l -> l.getListeners().stream())
+                  .collect(Collectors.toList())
+                  .forEach(sink -> sink.next(msg));
+              //log.info("-------------------------------------------------------");
             }
 
             @Override
@@ -82,10 +93,10 @@ public class PahoMqttClient implements MqttClient {
           new IMqttActionListener() {
             @Override
             public void onSuccess(final IMqttToken asyncActionToken) {
-              log.info("Connected: " + client.isConnected());
+              //log.info("Connected: " + client.isConnected());
               for (Map.Entry<String, MqttMessage> entry : retainedMessages.entrySet()) {
                 try {
-                  log.info("Deliver retained message on topic "+entry.getKey());
+                  //log.info("Deliver retained message on topic " + entry.getKey());
                   client.publish(entry.getKey(), entry.getValue());
                 } catch (MqttException e) {
                   log.warn("Cannot deliver retained message to " + hostAddress);
@@ -118,7 +129,7 @@ public class PahoMqttClient implements MqttClient {
   @Override
   public Flux<MqttWireMessage> publish(String topic, MqttMessage message) {
     if (log.isInfoEnabled()) {
-      log.info(" <- " + topic + ": " + new String(message.getPayload()));
+      //log.info(" <- " + topic + ": " + new String(message.getPayload()));
     }
     if (message.isRetained()) {
       retainedMessages.put(topic, message);
@@ -154,59 +165,84 @@ public class PahoMqttClient implements MqttClient {
   }
 
   @Override
-  public Flux<MqttMessage> listenTopic(String topic) {
-    return Flux.create(
-        (FluxSink<MqttMessage> sink) -> {
-          sink.onDispose(
-              () -> {
-                synchronized (registeredSinks) {
-                  final Collection<FluxSink<MqttMessage>> existingSubscriptions =
-                      registeredSinks.get(topic);
-                  if (existingSubscriptions != null) existingSubscriptions.remove(sink);
-                  if (existingSubscriptions == null || existingSubscriptions.isEmpty()) {
-                    registeredSinks.remove(topic);
-                    runningClients
-                        .values()
-                        .forEach(
-                            client -> {
-                              try {
-                                client.unsubscribe(topic);
-                              } catch (MqttException e) {
-                                log.error("Cannot unsubscribe from " + topic, e);
-                              }
-                            });
-                  }
+  public Flux<ReceivedMqttMessage> listenTopic(String topic) {
+    final Pattern topicPattern = parseTopic(topic);
+    final Flux<ReceivedMqttMessage> retainedStream =
+        Flux.fromStream(
+            retainedMessages.entrySet().stream()
+                .filter(e -> topicPattern.matcher(e.getKey()).matches())
+                .map(
+                    e -> new ImmutableReceivedMqttMessage(e.getKey(), e.getValue())));
+    final Flux<ReceivedMqttMessage> liveStream =
+        Flux.create(
+            (FluxSink<ReceivedMqttMessage> sink) -> {
+              sink.onDispose(
+                  () -> {
+                    synchronized (registeredSinks) {
+                      final RegisteredListeners existingSubscriptions = registeredSinks.get(topic);
+                      if (existingSubscriptions != null)
+                        existingSubscriptions.getListeners().remove(sink);
+                      if (existingSubscriptions == null
+                          || existingSubscriptions.getListeners().isEmpty()) {
+                        registeredSinks.remove(topic);
+                        runningClients
+                            .values()
+                            .forEach(
+                                client -> {
+                                  try {
+                                    client.unsubscribe(topic);
+                                  } catch (MqttException e) {
+                                    log.error("Cannot unsubscribe from " + topic, e);
+                                  }
+                                });
+                      }
+                    }
+                  });
+              synchronized (registeredSinks) {
+                final RegisteredListeners existingSubscriptions = registeredSinks.get(topic);
+                if (existingSubscriptions != null) {
+                  existingSubscriptions.getListeners().add(sink);
+                } else {
+                  final Collection<FluxSink<ReceivedMqttMessage>> newSubscriptions =
+                      new ConcurrentLinkedDeque<>();
+
+                  final RegisteredListeners newListeners =
+                      new RegisteredListeners(topicPattern, newSubscriptions);
+                  registeredSinks.put(topic, newListeners);
+                  newSubscriptions.add(sink);
+                  runningClients
+                      .values()
+                      .forEach(
+                          client -> {
+                            try {
+                              if (client.isConnected()) client.subscribe(topic, 1);
+                            } catch (MqttException e) {
+                              log.error("Cannot subscribe to " + topic, e);
+                            }
+                          });
                 }
-              });
-          synchronized (registeredSinks) {
-            final Collection<FluxSink<MqttMessage>> existingSubscriptions =
-                registeredSinks.get(topic);
-            if (existingSubscriptions != null) {
-              existingSubscriptions.add(sink);
-            } else {
-              final Collection<FluxSink<MqttMessage>> newSubscriptions =
-                  new ConcurrentLinkedDeque<>();
-              registeredSinks.put(topic, newSubscriptions);
-              newSubscriptions.add(sink);
-              runningClients
-                  .values()
-                  .forEach(
-                      client -> {
-                        try {
-                          if (client.isConnected()) client.subscribe(topic, 1);
-                        } catch (MqttException e) {
-                          log.error("Cannot subscribe to " + topic, e);
-                        }
-                      });
-            }
-          }
-        });
+              }
+            });
+    return Flux.concat(retainedStream, liveStream);
+  }
+
+  private Pattern parseTopic(final String topic) {
+    return Pattern.compile(
+        SPLIT_PATTERN
+            .splitAsStream(topic)
+            .map(
+                p -> {
+                  if (p.equals("#")) return ".*";
+                  else if (p.equals("+")) return "[^/]*";
+                  else return Pattern.quote(p);
+                })
+            .collect(Collectors.joining("/")));
   }
 
   @Override
   public void registerTopic(
       final String topic,
-      final Consumer<MqttMessage> mqttMessageConsumer,
+      final Consumer<ReceivedMqttMessage> mqttMessageConsumer,
       final Consumer<Disposable> disposableConsumer) {
     disposableConsumer.accept(
         listenTopic(topic)
@@ -216,5 +252,17 @@ public class PahoMqttClient implements MqttClient {
                   log.warn("Error processing " + topic, ex);
                   registerTopic(topic, mqttMessageConsumer, disposableConsumer);
                 }));
+  }
+
+  @Value
+  private static final class RegisteredListeners {
+    private Pattern matchingTopic;
+    private Collection<FluxSink<ReceivedMqttMessage>> listeners;
+  }
+
+  @Value
+  private static final class ImmutableReceivedMqttMessage implements ReceivedMqttMessage {
+    private String topic;
+    private MqttMessage message;
   }
 }

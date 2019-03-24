@@ -3,7 +3,6 @@ package ch.bergturbenthal.home.touch.domain.menu;
 import ch.bergturbenthal.home.touch.domain.mqtt.MqttClient;
 import ch.bergturbenthal.home.touch.domain.renderer.DisplayRenderer;
 import ch.bergturbenthal.home.touch.domain.renderer.Shapes;
-import ch.bergturbenthal.home.touch.domain.settings.Screen;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +15,6 @@ import java.io.IOException;
 import java.util.Base64;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 public class AbstractDisplayHandler {
@@ -77,13 +75,15 @@ public class AbstractDisplayHandler {
   }
 
   protected Disposable startLoop(
-      final Screen screen,
+      String topic,
       final DisplayRenderer displayRenderer,
-      final AtomicReference<Runnable> refresh,
+      final Runnable refresh,
       final List<DisplayEntry> displayList,
       Runnable defaultAction) {
+    refresh.run();
     return mqttClient
-        .listenTopic(screen.getTopic() + "/touchPosition")
+        .listenTopic(topic + "/touchPosition")
+        .map(MqttClient.ReceivedMqttMessage::getMessage)
         .map(MqttMessage::getPayload)
         .map(
             d -> {
@@ -101,13 +101,20 @@ public class AbstractDisplayHandler {
             })
         .subscribe(
             p -> {
-              boolean handled = false;
               Iterator<DisplayEntry> iterator = displayList.iterator();
-              while (!handled && iterator.hasNext()) {
-                handled = iterator.next().handleTouch(p);
+              DisplayEntry.TouchResult touchResult = DisplayEntry.TouchResult.IGNORED;
+              while (touchResult == DisplayEntry.TouchResult.IGNORED && iterator.hasNext())
+                touchResult = iterator.next().handleTouch(p);
+              switch (touchResult) {
+                case IGNORED:
+                  defaultAction.run();
+                  break;
+                case DIRTY:
+                  refresh.run();
+                  break;
+                case NOOP:
+                  break;
               }
-              if (!handled) defaultAction.run();
-              refresh.get().run();
             },
             ex -> log.warn("Cannot update ui", ex));
   }
