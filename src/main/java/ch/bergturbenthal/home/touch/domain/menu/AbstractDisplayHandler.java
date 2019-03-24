@@ -1,5 +1,6 @@
 package ch.bergturbenthal.home.touch.domain.menu;
 
+import ch.bergturbenthal.home.touch.domain.menu.settings.Type;
 import ch.bergturbenthal.home.touch.domain.mqtt.MqttClient;
 import ch.bergturbenthal.home.touch.domain.renderer.DisplayRenderer;
 import ch.bergturbenthal.home.touch.domain.renderer.Shapes;
@@ -12,9 +13,12 @@ import reactor.core.publisher.Mono;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.text.DecimalFormat;
+import java.text.MessageFormat;
 import java.util.Base64;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 
 @Slf4j
 public class AbstractDisplayHandler {
@@ -105,6 +109,7 @@ public class AbstractDisplayHandler {
               DisplayEntry.TouchResult touchResult = DisplayEntry.TouchResult.IGNORED;
               while (touchResult == DisplayEntry.TouchResult.IGNORED && iterator.hasNext())
                 touchResult = iterator.next().handleTouch(p);
+              //log.info("Touch result: "+touchResult);
               switch (touchResult) {
                 case IGNORED:
                   defaultAction.run();
@@ -150,5 +155,33 @@ public class AbstractDisplayHandler {
     } catch (IOException ex) {
       log.warn("Cannot generate image", ex);
     }
+  }
+
+  protected Function<String, String> createDisplayFormatter(final Type type, final String dvFormat) {
+    final Function<String, String> valueFormatter;
+    if (type != null && dvFormat != null) {
+      switch (type) {
+        case INTEGER:
+          {
+            final DecimalFormat format = new DecimalFormat(dvFormat);
+            valueFormatter = c -> format.format(Integer.parseInt(c));
+          }
+          break;
+        case STRING:
+        default:
+          {
+            final MessageFormat messageFormat = new MessageFormat(dvFormat);
+            valueFormatter = messageFormat::format;
+          }
+          break;
+        case FLOAT:
+          {
+            final DecimalFormat format = new DecimalFormat(dvFormat);
+            valueFormatter = c -> format.format(Double.parseDouble(c));
+          }
+          break;
+      }
+    } else valueFormatter = Function.identity();
+    return valueFormatter;
   }
 }

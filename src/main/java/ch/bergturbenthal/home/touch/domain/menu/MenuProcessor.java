@@ -1,6 +1,10 @@
 package ch.bergturbenthal.home.touch.domain.menu;
 
-import ch.bergturbenthal.home.touch.domain.settings.*;
+import ch.bergturbenthal.home.touch.domain.menu.settings.MenuEntry;
+import ch.bergturbenthal.home.touch.domain.menu.settings.Screen;
+import ch.bergturbenthal.home.touch.domain.menu.settings.View;
+import ch.bergturbenthal.home.touch.domain.settings.DisplaySettings;
+import ch.bergturbenthal.home.touch.domain.settings.MenuProperties;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -10,7 +14,6 @@ import reactor.core.publisher.Mono;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -23,17 +26,17 @@ public class MenuProcessor {
   private final MenuProperties menuProperties;
   private final ValueListHandler valueListHandler;
   private final MenuHandler menuHandler;
-  private final ScheduledExecutorService scheduledExecutorService;
+  private ValueEditHandler valueEditHandler;
 
   public MenuProcessor(
       final MenuProperties menuProperties,
       final ValueListHandler valueListHandler,
       final MenuHandler menuHandler,
-      ScheduledExecutorService scheduledExecutorService) {
+      final ValueEditHandler valueEditHandler) {
     this.menuProperties = menuProperties;
     this.valueListHandler = valueListHandler;
     this.menuHandler = menuHandler;
-    this.scheduledExecutorService = scheduledExecutorService;
+    this.valueEditHandler = valueEditHandler;
   }
 
   public Disposable startTopic(final String topic, final Screen screen) {
@@ -138,6 +141,12 @@ public class MenuProcessor {
           .map(e -> selectedView.getMenu().get(e))
           .map(MenuEntry::getContent)
           .map(e -> new DisplayState(true, e))
+          .cast(MenuResult.class)
+          .defaultIfEmpty(new GoBackResult());
+    }
+    if (selectedView.getValueEdit() != null) {
+      return valueEditHandler
+          .showValueEditor(topic, selectedView.getValueEdit(), settings)
           .cast(MenuResult.class)
           .defaultIfEmpty(new GoBackResult());
     }

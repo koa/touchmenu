@@ -1,5 +1,6 @@
 name: Test
 #displaySettings: default
+screenTimeout: "PT5S"
 defaultView:
   displayValue:
     - topic: control/clock
@@ -13,7 +14,7 @@ defaultView:
       format: 0.0°C
 rootMenu:
   menu:
-    test:
+    showTemp:
       content:
         displayValue:
           - label: "Temp. Ist"
@@ -24,4 +25,14 @@ rootMenu:
             topic: control/Test Temp/temp
             type: float
             format: 0.0°C
-      label: Temperatur
+      label: Temp anz
+    setTemp:
+      label: Temp änd
+      content:
+        valueEdit:
+          topic: control/Test Temp/temp
+          label: Raumtemp
+          increment: 0.1
+          defaultValue: 20
+          type: float
+          format: 0.0°C

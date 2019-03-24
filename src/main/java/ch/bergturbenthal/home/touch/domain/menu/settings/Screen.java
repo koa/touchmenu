@@ -1,4 +1,4 @@
-package ch.bergturbenthal.home.touch.domain.settings;
+package ch.bergturbenthal.home.touch.domain.menu.settings;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
@@ -20,9 +20,9 @@ public class Screen {
   @JsonFormat(shape = JsonFormat.Shape.STRING)
   private Duration screenTimeout;
 
-  @NonNull private View defaultView;
-  @NonNull private View rootMenu;
-  private String startEntry;
+  @NonNull private View   defaultView;
+  @NonNull private View   rootMenu;
+  private          String startEntry;
 
   @JsonPOJOBuilder(withPrefix = "")
   public static class ScreenBuilder {

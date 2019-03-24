@@ -1,7 +1,7 @@
 package ch.bergturbenthal.home.touch.domain.menu;
 
 import ch.bergturbenthal.home.touch.domain.mqtt.MqttClient;
-import ch.bergturbenthal.home.touch.domain.settings.Screen;
+import ch.bergturbenthal.home.touch.domain.menu.settings.Screen;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;

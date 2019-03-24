@@ -1,17 +1,13 @@
 package ch.bergturbenthal.home.touch;
 
-import ch.bergturbenthal.home.touch.domain.settings.Screen;
+import ch.bergturbenthal.home.touch.domain.menu.settings.Screen;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
-import com.fasterxml.jackson.databind.type.MapLikeType;
-import com.fasterxml.jackson.databind.type.TypeFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
 
 public class GenerateMenuYaml {
   public static void main(String[] args) throws IOException {

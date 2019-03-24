@@ -1,4 +1,4 @@
-package ch.bergturbenthal.home.touch.domain.settings;
+package ch.bergturbenthal.home.touch.domain.menu.settings;
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;

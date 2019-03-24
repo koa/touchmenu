@@ -1,10 +1,11 @@
 package ch.bergturbenthal.home.touch.domain.menu;
 
+import ch.bergturbenthal.home.touch.domain.menu.settings.Type;
 import ch.bergturbenthal.home.touch.domain.mqtt.MqttClient;
 import ch.bergturbenthal.home.touch.domain.renderer.DisplayRenderer;
 import ch.bergturbenthal.home.touch.domain.settings.DisplaySettings;
-import ch.bergturbenthal.home.touch.domain.settings.DisplayValue;
-import ch.bergturbenthal.home.touch.domain.settings.View;
+import ch.bergturbenthal.home.touch.domain.menu.settings.DisplayValue;
+import ch.bergturbenthal.home.touch.domain.menu.settings.View;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -44,11 +45,10 @@ public class ValueListHandler extends AbstractDisplayHandler {
     return Mono.create(
         sink -> {
           final DisplayRenderer displayRenderer = new DisplayRenderer(settings);
-          final String contentTopic = topic + "/image";
           final List<DisplayValue> displayValue = view.getDisplayValue();
           final int touchRowCount = settings.getTouchRowCount();
           final int touchColumnCount = settings.getTouchColumnCount();
-          Queue<Disposable> cleanupQueue = new ConcurrentLinkedDeque<>();
+          final Queue<Disposable> cleanupQueue = new ConcurrentLinkedDeque<>();
           final AtomicReference<Runnable> refresh = new AtomicReference<>(() -> {});
           final boolean hasCloseButton = showBackButton;
           setBackgroundLight(topic + "/backlight", enabledBackgroundLight ? 100 : 0);
@@ -56,30 +56,7 @@ public class ValueListHandler extends AbstractDisplayHandler {
           List<Supplier<String>> menuEntries = new ArrayList<>();
           for (DisplayValue dv : displayValue) {
             AtomicReference<String> lastValue = new AtomicReference<>("");
-            Function<String, String> valueFormatter;
-            if (dv.getType() != null && dv.getFormat() != null) {
-              switch (dv.getType()) {
-                case INTEGER:
-                  {
-                    final DecimalFormat format = new DecimalFormat(dv.getFormat());
-                    valueFormatter = c -> format.format(Integer.parseInt(c));
-                  }
-                  break;
-                case STRING:
-                default:
-                  {
-                    final MessageFormat messageFormat = new MessageFormat(dv.getFormat());
-                    valueFormatter = messageFormat::format;
-                  }
-                  break;
-                case FLOAT:
-                  {
-                    final DecimalFormat format = new DecimalFormat(dv.getFormat());
-                    valueFormatter = c -> format.format(Double.parseDouble(c));
-                  }
-                  break;
-              }
-            } else valueFormatter = Function.identity();
+            Function<String, String> valueFormatter = createDisplayFormatter(dv.getType(), dv.getFormat());
             Function<String, String> formatter =
                 c -> {
                   if (c == null || c.isEmpty()) return "-";
@@ -117,7 +94,7 @@ public class ValueListHandler extends AbstractDisplayHandler {
           final AtomicInteger firstRow = new AtomicInteger(0);
           int maxFirstRow = Math.max(menuRowCount - visibleRows, 0);
           final int lastRow = touchRowCount - 1;
-          List<DisplayEntry> displayList = new ArrayList<>();
+          final List<DisplayEntry> displayList = new ArrayList<>();
 
           final Runnable upAction =
               () -> {
@@ -168,7 +145,7 @@ public class ValueListHandler extends AbstractDisplayHandler {
                   }
                 });
           }
-          refresh.set(() -> paint(displayRenderer, contentTopic, displayList));
+          refresh.set(() -> paint(displayRenderer, topic + "/image", displayList));
           cleanupQueue.add(
               startLoop(
                   topic,
