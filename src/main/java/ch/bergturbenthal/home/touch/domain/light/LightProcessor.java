@@ -3,6 +3,7 @@ package ch.bergturbenthal.home.touch.domain.light;
 import ch.bergturbenthal.home.touch.domain.mqtt.MqttClient;
 import ch.bergturbenthal.home.touch.domain.util.DisposableConsumer;
 import ch.bergturbenthal.home.touch.domain.util.MqttMessageUtil;
+import ch.bergturbenthal.home.touch.domain.util.ScheduledFutureConsumer;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.springframework.stereotype.Service;
@@ -59,16 +60,7 @@ public class LightProcessor {
           dimmerConsumer.accept(currentDimmValue.get());
         };
     final DisposableConsumer warmStartDisposable = new DisposableConsumer();
-    Consumer<ScheduledFuture<?>> pendingFutureConsumer =
-        new Consumer<ScheduledFuture<?>>() {
-          private AtomicReference<ScheduledFuture<?>> pendingFuture = new AtomicReference<>();
-
-          @Override
-          public void accept(final ScheduledFuture<?> scheduledFuture) {
-            final ScheduledFuture<?> lastFuture = pendingFuture.getAndSet(scheduledFuture);
-            if (lastFuture != null && !lastFuture.isDone()) lastFuture.cancel(false);
-          }
-        };
+    Consumer<ScheduledFuture<?>> pendingFutureConsumer = new ScheduledFutureConsumer();
     mqttClient.registerTopic(
         topicBase + "/warmStart",
         receivedMqttMessage -> {
@@ -118,4 +110,5 @@ public class LightProcessor {
     return Math.max(
         lowerBound, Math.min(1.0, Double.parseDouble(new String(message.getPayload()))));
   }
+
 }

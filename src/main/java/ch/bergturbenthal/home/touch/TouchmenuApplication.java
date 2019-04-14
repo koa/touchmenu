@@ -2,6 +2,7 @@ package ch.bergturbenthal.home.touch;
 
 import ch.bergturbenthal.home.touch.domain.light.LightProcessor;
 import ch.bergturbenthal.home.touch.domain.menu.MenuProcessor;
+import ch.bergturbenthal.home.touch.domain.motiondetection.MotionDetectionProcessor;
 import ch.bergturbenthal.home.touch.domain.mqtt.impl.PahoMqttClient;
 import ch.bergturbenthal.home.touch.domain.settings.MenuProperties;
 import org.springframework.boot.SpringApplication;
@@ -21,7 +22,8 @@ import java.util.concurrent.ScheduledExecutorService;
       PahoMqttClient.class,
       MenuProperties.class,
       MenuProcessor.class,
-      LightProcessor.class
+      LightProcessor.class,
+      MotionDetectionProcessor.class
     })
 @Import({SimpleDiscoveryClientAutoConfiguration.class
   //                , PropertyLogger.class
