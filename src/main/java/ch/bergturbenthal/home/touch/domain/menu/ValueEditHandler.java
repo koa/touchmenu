@@ -63,10 +63,17 @@ public class ValueEditHandler extends AbstractDisplayHandler {
                 // log.info("Current value: " + currentValue);
 
                 final double newValueNumber = (currentValue + increment) * valueEdit.getIncrement();
+                final Double minBounded =
+                    valueEdit
+                        .getMin()
+                        .map(min -> Math.max(min, newValueNumber))
+                        .orElse(newValueNumber);
+                final double boundedValue =
+                    valueEdit.getMax().map(max -> Math.min(max, minBounded)).orElse(minBounded);
                 String newValue =
                     valueEdit.getType() == Type.INTEGER
-                        ? Integer.toString((int) newValueNumber)
-                        : Double.toString(newValueNumber);
+                        ? Integer.toString((int) boundedValue)
+                        : Double.toString(boundedValue);
                 // log.info("Value after: " + newValue);
                 final MqttMessage message = new MqttMessage();
                 message.setQos(1);

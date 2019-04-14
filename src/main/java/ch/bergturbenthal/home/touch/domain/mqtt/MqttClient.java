@@ -11,6 +11,7 @@ public interface MqttClient {
   Flux<MqttWireMessage> publish(String topic, MqttMessage message);
 
   Flux<ReceivedMqttMessage> listenTopic(String topic);
+  void send(String topic, MqttMessage message);
 
   void registerTopic(
       final String topic,

@@ -112,6 +112,9 @@
                 </executions>
                 <version>1.0.2</version>
                 <configuration>
+                    <from>
+                        <image>gcr.io/distroless/java@sha256:da8aa0fa074d0ed9c4b71ad15af5dffdf6afdd768efbe2f0f7b0d60829278630</image>
+                    </from>
                     <to>
                         <image>koa1/touchmenu:${project.version}</image>
                     </to>

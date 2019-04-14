@@ -1,5 +1,6 @@
 package ch.bergturbenthal.home.touch;
 
+import ch.bergturbenthal.home.touch.domain.light.LightProcessor;
 import ch.bergturbenthal.home.touch.domain.menu.MenuProcessor;
 import ch.bergturbenthal.home.touch.domain.mqtt.impl.PahoMqttClient;
 import ch.bergturbenthal.home.touch.domain.settings.MenuProperties;
@@ -16,12 +17,20 @@ import java.util.concurrent.ScheduledExecutorService;
 
 @SpringBootApplication
 @ComponentScan(
-    basePackageClasses = {PahoMqttClient.class, MenuProperties.class, MenuProcessor.class})
-@Import(SimpleDiscoveryClientAutoConfiguration.class)
+    basePackageClasses = {
+      PahoMqttClient.class,
+      MenuProperties.class,
+      MenuProcessor.class,
+      LightProcessor.class
+    })
+@Import({SimpleDiscoveryClientAutoConfiguration.class
+  //                , PropertyLogger.class
+})
 @EnableScheduling
 public class TouchmenuApplication {
 
   public static void main(String[] args) {
+    System.setProperty("java.awt.headless", "true");
     SpringApplication.run(TouchmenuApplication.class, args);
   }
 

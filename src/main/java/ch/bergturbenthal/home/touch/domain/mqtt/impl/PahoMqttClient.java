@@ -48,9 +48,22 @@ public class PahoMqttClient implements MqttClient {
     discover();
   }
 
+  @Override
+  public void send(final String topic, final MqttMessage message) {
+    publish(topic, message)
+        .count()
+        .subscribe(
+            count -> {
+              if (count == 0) log.warn("No target for message " + message + " to " + topic);
+            },
+            ex -> {
+              log.warn("Cannot publish message " + message + " to " + topic);
+            });
+  }
+
   @Scheduled(fixedDelay = 60 * 1000, initialDelay = 10 * 1000)
   public void discover() throws MqttException {
-    //log.info("Discover");
+    // log.info("Discover");
     final MqttEndpoint mqtt = properties.getMqtt();
     final String service = mqtt.getService();
     final List<ServiceInstance> discoveryClientInstances = discoveryClient.getInstances(service);
@@ -74,7 +87,7 @@ public class PahoMqttClient implements MqttClient {
             public void messageArrived(final String s, final MqttMessage mqttMessage) {
               if (mqttMessage.isRetained()) retainedMessages.put(s, mqttMessage);
               if (log.isInfoEnabled()) {
-                //log.info(" -> " + s + ": " + new String(mqttMessage.getPayload()));
+                log.info(" -> " + s + ": " + new String(mqttMessage.getPayload()));
               }
               final ReceivedMqttMessage msg = new ImmutableReceivedMqttMessage(s, mqttMessage);
               registeredSinks.values().stream()
@@ -82,7 +95,7 @@ public class PahoMqttClient implements MqttClient {
                   .flatMap(l -> l.getListeners().stream())
                   .collect(Collectors.toList())
                   .forEach(sink -> sink.next(msg));
-              //log.info("-------------------------------------------------------");
+              // log.info("-------------------------------------------------------");
             }
 
             @Override
@@ -93,10 +106,10 @@ public class PahoMqttClient implements MqttClient {
           new IMqttActionListener() {
             @Override
             public void onSuccess(final IMqttToken asyncActionToken) {
-              //log.info("Connected: " + client.isConnected());
+              // log.info("Connected: " + client.isConnected());
               for (Map.Entry<String, MqttMessage> entry : retainedMessages.entrySet()) {
                 try {
-                  //log.info("Deliver retained message on topic " + entry.getKey());
+                  // log.info("Deliver retained message on topic " + entry.getKey());
                   client.publish(entry.getKey(), entry.getValue());
                 } catch (MqttException e) {
                   log.warn("Cannot deliver retained message to " + hostAddress);
@@ -129,7 +142,7 @@ public class PahoMqttClient implements MqttClient {
   @Override
   public Flux<MqttWireMessage> publish(String topic, MqttMessage message) {
     if (log.isInfoEnabled()) {
-      //log.info(" <- " + topic + ": " + new String(message.getPayload()));
+      // log.info(" <- " + topic + ": " + new String(message.getPayload()));
     }
     if (message.isRetained()) {
       retainedMessages.put(topic, message);
@@ -171,8 +184,7 @@ public class PahoMqttClient implements MqttClient {
         Flux.fromStream(
             retainedMessages.entrySet().stream()
                 .filter(e -> topicPattern.matcher(e.getKey()).matches())
-                .map(
-                    e -> new ImmutableReceivedMqttMessage(e.getKey(), e.getValue())));
+                .map(e -> new ImmutableReceivedMqttMessage(e.getKey(), e.getValue())));
     final Flux<ReceivedMqttMessage> liveStream =
         Flux.create(
             (FluxSink<ReceivedMqttMessage> sink) -> {

@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class MenuConfigProcessor {
   private final MqttClient mqttClient;
   private final ObjectReader screenObjectReader;
-  private MenuProcessor menuProcessor;
+  private final MenuProcessor menuProcessor;
 
   public MenuConfigProcessor(final MqttClient mqttClient, MenuProcessor menuProcessor) {
     this.mqttClient = mqttClient;

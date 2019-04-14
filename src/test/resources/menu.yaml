@@ -36,23 +36,64 @@ rootMenu:
           defaultValue: 20
           type: float
           format: 0.0°C
-    setContrast:
-      label: Kontrast
+    light:
+      label: Licht
       content:
-        valueEdit:
-          topic: BrickletLCD128x64/Test LCD/contrast
-          label: Kontrast
-          increment: 2
-          defaultValue: 14
-          type: integer
-          format: 0
-    setBright:
-      label: Helligkeit
+        menu:
+          setValue:
+            label: "Helligkeit"
+            content:
+              valueEdit:
+                topic: Licht/Demo/Demo/value
+                increment: 0.1
+                defaultValue: 0
+                type: float
+                format: 0.0
+                min: 0
+                max: 1
+          setWarmStart:
+            label: "Warm start"
+            content:
+              valueEdit:
+                topic: Licht/Demo/Demo/warmStart
+                increment: 0.1
+                defaultValue: 0
+                type: float
+                format: 0.0
+                min: 0
+                max: 0.9
+          setBrightBalance:
+            label: "Balance"
+            content:
+              valueEdit:
+                topic: Licht/Demo/Demo/brightBalance
+                increment: 0.1
+                defaultValue: 0
+                type: float
+                format: 0.0
+                min: -1
+                max: 1
+    display:
+      label: Display
       content:
-        valueEdit:
-          topic: BrickletLCD128x64/Test LCD/backlight
-          label: Helligkeit
-          increment: 10
-          defaultValue: 80
-          type: integer
-          format: 0
+        menu:
+          setContrast:
+            label: Kontrast
+            content:
+              valueEdit:
+                topic: BrickletLCD128x64/H7C/contrast
+                label: Kontrast
+                increment: 2
+                defaultValue: 14
+                type: integer
+                format: 0
+          setBright:
+            label: Helligkeit
+            content:
+              valueEdit:
+                topic: BrickletLCD128x64/H7C/backlight
+                label: Helligkeit
+                increment: 10
+                defaultValue: 80
+                type: integer
+                format: 0
